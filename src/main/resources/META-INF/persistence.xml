@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<persistence xmlns="http://java.sun.com/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd" version="1.0">
+    <persistence-unit name="coding" transaction-type="RESOURCE_LOCAL">
+        <properties>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.MySQL5Dialect"/>
+            <property name="hibernate.connection.driver_class" value="org.gjt.mm.mysql.Driver"/>
+            <property name="hibernate.connection.username" value="kvwJFdLPUHq5eq8S"/>
+            <property name="hibernate.connection.password" value="wfCsOkZBzR0W2fJT"/>
+            <property name="hibernate.connection.url" value="jdbc:mysql://10.9.1.188:3306/cf_66dee296_50b8_4f2f_9dcc_3ee8299a580f?useUnicode=true&amp;characterEncoding=UTF-8"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+        </properties>
+    </persistence-unit>
+    <persistence-unit name="db4free.net" transaction-type="RESOURCE_LOCAL">
+        <properties>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.MySQL5Dialect"/>
+            <property name="hibernate.connection.driver_class" value="org.gjt.mm.mysql.Driver"/>
+            <property name="hibernate.connection.username" value="lfxstore"/>
+            <property name="hibernate.connection.password" value="admin123"/>
+            <property name="hibernate.connection.url" value="jdbc:mysql://db4free.net:3306/lfxstore?useUnicode=true&amp;characterEncoding=UTF-8"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+        </properties>
+    </persistence-unit>
+    <persistence-unit name="local" transaction-type="RESOURCE_LOCAL">
+        <properties>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.MySQL5Dialect"/>
+            <property name="hibernate.connection.driver_class" value="org.gjt.mm.mysql.Driver"/>
+            <property name="hibernate.connection.username" value="dobbie"/>
+            <property name="hibernate.connection.password" value="admin123"/>
+            <property name="hibernate.connection.url" value="jdbc:mysql://localhost:3306/datajpa?useUnicode=true&amp;characterEncoding=UTF-8"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+        </properties>
+    </persistence-unit>
+</persistence>

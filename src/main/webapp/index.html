@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head lang="zh-CN">
+    <meta charset="UTF-8">
+    <title></title>
+    <style type="text/css">
+        body, html, #l-map {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            font-family: "微软雅黑";
+        }
+    </style>
+    <link rel="stylesheet" href="http://cdn.bootcss.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="http://cdn.bootcss.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+    <script src="http://cdn.bootcss.com/jquery/2.1.3/jquery.min.js"></script>
+    <script src="http://cdn.bootcss.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=2yQwGpHRMOozeb15lRP9MUfL"></script>
+</head>
+<body>
+<div role="tabpanel">
+    <!-- Nav tabs -->
+    <ul class="nav nav-tabs" role="tablist" id="myTab">
+        <li role="presentation" class="active" id="li_data"><a href="#data" aria-controls="data" role="tab"
+                                                               data-toggle="tab">数据上传</a></li>
+        <li role="presentation" id="li_map"><a href="#map" aria-controls="map" role="tab" data-toggle="tab">地图预览</a>
+        </li>
+    </ul>
+    <!-- Tab panes -->
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="data">
+            <div class="panel panel-primary" style="margin:10px 5px; width:99%;">
+                <div class="panel-heading">地址查询：检测地址是否有效</div>
+                <div class="panel-body">
+                    <input type="text" class="form-control" id="singleaddr" placeholder="请输入地址" maxlength="100">
+                    <button class="btn btn-primary" id="queryAddrPoint">查询</button>
+                </div>
+                <div class="panel-footer" id="singleaddr_point">经度/纬度：0/0</div>
+            </div>
+            <div class="form-group panel panel-primary" style="margin:10px 5px; width:99%;">
+                <div class="panel-heading">文件上传</div>
+                <div class="panel-body">
+                    <div class="form-group" style="display: none">
+                        <label class="control-label">
+                            <input type="checkbox" class="checkbox" id="isreset">是否清除历史上传
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label">单文件上传</label>
+                        <input type="file" id="singlefile"/>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label">多文件上传</label>
+                        <input type="file" id="multifiles" name="files[]" multiple/>
+                    </div>
+                </div>
+                <div class="panel-footer"><label class="control-label" id="file_progress" style="color: blue"></label></div>
+            </div>
+        </div>
+        <div role="tabpanel" class="tab-pane" id="map">
+            <div class="form-group panel panel-primary" style="margin:10px 5px; width:99%;">
+                <div class="panel-heading">地图服务</div>
+                <div class="panel-body">
+                    <button class="btn btn-primary" id="syncHistory">同步历史</button>
+                    <button class="btn btn-primary" id="clearHistory">清空历史</button>
+                    <button class="btn btn-primary" id="syncAndPaintMap">绘制坐标</button>
+                    <label class="control-label" id="syncAndPaintMap_progress" style="color: blue"></label>
+                    <div id="l-map" style="margin: 10px 0px"></div>
+                </div>
+                <div class="panel-footer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
+
+<script type="text/javascript">
+    //地图服务
+    var map = new BMap.Map("l-map");
+    var geo = new BMap.Geocoder();
+    map.enableScrollWheelZoom(); // 允许滚轮缩放
+    map.centerAndZoom(new BMap.Point(113.30765, 23.120049), 11);
+
+    //地址解析
+    var firstflag = true;
+    var addrs = [];//地址数组
+    var paintMapByPointInterval;//绘制地图定时器
+    var getPointByAddrInterval;//转换坐标定时器
+    var addrsSize = 0;//地址总数
+    var pointsSize = 1;//坐标总数
+    var objArray = [];//坐标对象数组
+    var currFileIndex = 0;//当前读取文件下标
+
+    var ipport = "http://lfxstore.coding.io";
+//    var ipport = "http://localhost:8080/dataps_deploy";
+    //通过坐标绘制地图
+    function paintMapByPoint() {
+        if (objArray.length > 0) {
+            var obj = objArray.pop();
+            var point = new BMap.Point(obj.lng, obj.lat);
+            if (firstflag) {
+                map.centerAndZoom(point, 12);
+                firstflag = false;
+            }
+            map.addOverlay(new BMap.Marker(point));
+            writeLog("绘制进度(" + getCurrentTime() + ")：" + pointsSize + "/" + addrsSize);
+            writeLog("绘制进度(" + getCurrentTime() + ")：正在绘制地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
+            $("#syncAndPaintMap_progress").text(pointsSize + "/" + addrsSize+"\t\t正在绘制地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
+            pointsSize++;
+        } else {
+            //TODO 停止绘制
+            clearInterval(paintMapByPointInterval);
+            writeLog("绘制进度(" + getCurrentTime() + ")：绘制完成！");
+            $("#syncAndPaintMap_progress").text(addrsSize + "/" + addrsSize+"\t\t绘制完成！");
+        }
+    }
+    var lockflag = false;
+    var bufferSize = 10;
+    //通过地址获得坐标，并添加到坐标数组中
+    function getPointByAddr() {
+        if (addrs.length >= 0) {
+            if(lockflag) return;
+            lockflag = true;
+            var currAddr = addrs.pop();
+            geo.getPoint(currAddr, function (point) {
+                if (point) {
+                    var obj = new Object();
+                    obj.addr = currAddr;
+                    obj.lat = point.lat;
+                    obj.lng = point.lng;
+                    objArray.push(obj);//添加坐标点对象到坐标数组
+
+                    var uploadArray = [];
+                    uploadArray.push(obj);
+                    //TODO 保存数据到服务器
+                    $.ajax({url:ipport+"/MapStoreServlet?t=addall&d="+JSON.stringify(uploadArray),success:function(evt){
+                        writeLog("上传进度(" + getCurrentTime() + ")：上传完成！");
+//                            $("#file_progress").text(objArray.length + "/" + addrsSize+"\t\t上传完成！");
+                        uploadArray = [];
+                        lockflag = false;
+                    },error:function(evt){
+                        console.log(evt);
+                        uploadArray = [];
+                        lockflag = false;
+                    }});
+
+                    writeLog("转换进度(" + getCurrentTime() + ")：" + objArray.length + "/" + addrsSize);
+                    writeLog("转换进度(" + getCurrentTime() + ")：正在转换地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
+                    $("#file_progress").text(objArray.length + "/" + addrsSize+"\t\t正在转换地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
+
+                    if (objArray.length == addrsSize) {
+                        //TODO 停止转换
+                        clearInterval(getPointByAddrInterval);
+                        writeLog("转换进度(" + getCurrentTime() + ")：转换完成！");
+                        $("#file_progress").text(objArray.length + "/" + addrsSize+"\t\t转换完成！");
+                        $("#syncAndPaintMap_progress").text("0/" + addrsSize);
+                        //TODO 启动绘制
+//                        setTimeout(function () {
+//                            writeLog("******************************************************************");
+//                            writeLog("绘制进度(" + getCurrentTime() + ")：开始绘制......");
+//                            paintMapByPointInterval = setInterval(paintMapByPoint, 10);//毫秒绘制
+//                        }, 1000);
+                    }
+                }
+            }, "广州市");
+        }
+    }
+    //过滤空地址
+    function filterNullOrEmptyAddrs(addrs) {
+        if (addrs) {
+            var newaddrs = [];
+            for (var i in addrs) {
+                if (addrs[i]) {
+                    newaddrs.push(addrs[i]);
+                }
+            }
+            return newaddrs;
+        }
+    }
+    //处理单文件上传
+    function handleSingleFileSelected(evt) {
+        writeLog("******************************************************************");
+        writeLog("读取进度(" + getCurrentTime() + ")：开始读取......");
+        //重置
+        reset();
+        var reader = new FileReader();
+        reader.onload = function (event) {
+            var result = event.target.result;
+            writeLog("读取进度(" + getCurrentTime() + ")：读取的文本为......[" + JSON.stringify(result) + "]");
+            //转换为数组
+            if (result) {
+                var resultArray = filterNullOrEmptyAddrs(result.split("\n"));
+                writeLog("读取进度(" + getCurrentTime() + ")：有效地址为......" + JSON.stringify(resultArray));
+                addrs = resultArray;
+                addrsSize = resultArray.length;
+                writeLog("读取进度(" + getCurrentTime() + ")：读取完成！");
+                //TODO 启动转换
+                setTimeout(function () {
+                    writeLog("******************************************************************");
+                    writeLog("读取进度(" + getCurrentTime() + ")：开始转换......");
+                    getPointByAddrInterval = setInterval(getPointByAddr, 10);//毫秒绘制
+                }, 1000);
+            }
+
+        }
+        reader.readAsText(evt.target.files[0]);
+    }
+    //处理多文件上传
+    function handleMultiFilesSelected(evt) {
+        writeLog("******************************************************************");
+        writeLog("读取进度(" + getCurrentTime() + ")：开始读取......");
+        //重置
+        reset();
+        var alladdrs = [];
+        if(evt.target.files){
+            var files = evt.target.files;
+            for(var i = 0; i<files.length ; i++){
+                var reader = new FileReader();
+                reader.onload = function (event) {
+                    currFileIndex++;
+                    var result = event.target.result;
+                    alladdrs = alladdrs.concat(result.split("\n"));
+                    writeLog("读取进度(" + getCurrentTime() + ")："+currFileIndex+"/"+files.length);
+                    writeLog("读取进度(" + getCurrentTime() + ")：正在读取地址......"+JSON.stringify(result.split("\n")));
+                    if(currFileIndex == files.length){
+                        var resultArray = filterNullOrEmptyAddrs(alladdrs);
+                        writeLog("读取进度(" + getCurrentTime() + ")：有效地址为......" + JSON.stringify(resultArray));
+                        addrs = resultArray;
+                        addrsSize = resultArray.length;
+                        writeLog("读取进度(" + getCurrentTime() + ")：读取完成！");
+                        //TODO 启动转换
+                        setTimeout(function () {
+                            writeLog("******************************************************************");
+                            writeLog("读取进度(" + getCurrentTime() + ")：开始转换......");
+                            getPointByAddrInterval = setInterval(getPointByAddr, 10);//毫秒绘制
+                        }, 1000);
+                    }
+                    //转换为数组
+                }
+                reader.readAsText(files[i]);
+            }
+        }
+    }
+    //写入日志
+    function writeLog(log) {
+        console.debug(log);
+        //$("#log").text(log + "\n" + $("#log").text());
+//        $("#log").focus();
+    }
+    /**
+     * 获取当前时间
+     * @returns {string|*}
+     */
+    function getCurrentTime() {
+        var d = new Date();
+        var vYear = d.getFullYear();
+        var vMon = d.getMonth() + 1;
+        var vDay = d.getDate();
+        var h = d.getHours();
+        var m = d.getMinutes();
+        var se = d.getSeconds();
+        s = vYear + "-" + (vMon < 10 ? "0" + vMon : vMon) + "-" + (vDay < 10 ? "0" + vDay : vDay) + " " + (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m) + ":" + (se < 10 ? "0" + se : se) + ":" + d.getMilliseconds();
+        return s;
+    }
+    //重置
+    function reset() {
+        //地址解析
+        firstflag = true;
+        addrs = [];//地址数组
+        paintMapByPointInterval = null;//绘制地图定时器
+        getPointByAddrInterval = null;//转换坐标定时器
+        addrsSize = 0;//地址总数
+        pointsSize = 1;//坐标总数
+        objArray = [];//坐标对象数组
+        currFileIndex = 0;//当前读取文件下标
+    }
+    function updateProgress() {
+        var valuenow = parseInt($("#progress").attr("aria-valuenow"));
+        var valuemax = parseInt($("#progress").attr("aria-valuemax"));
+        writeLog("当前进度：" + valuenow + "/" + valuemax);
+
+        $("#progress").attr("aria-valuenow", ++valuenow);
+        $("#progress").width((valuenow / valuemax) * 100 + "%");
+        if (valuenow >= valuemax) {
+            writeLog("finish!");
+            $("#li_map").css("visibility", "visible");
+        }
+    }
+    $(function () {
+        $('#myTab a[href="#map"]').click(function (e) {
+            $("#l-map").height($(document).height());
+            $("#progress").attr("aria-valuenow", 1);
+            $("#progress").width("0");
+        });
+        $("#queryAddrPoint").click(function(){
+            $("#singleaddr_point").text("经度/纬度：查询中，请稍后......");
+            geo.getPoint($("#singleaddr").val().toString(), function (point) {
+                console.log(point)
+                if (point) {
+                    //singleaddr_point">经度/纬度：0/0
+                    console.log("经度/纬度："+point.lng+"/"+point.lat)
+                    $("#singleaddr_point").text("经度/纬度："+point.lng+" / "+point.lat);
+                }else{
+                    $("#singleaddr_point").text("经度/纬度：无法解析");
+                }
+            }, "广州市");
+        });
+        $("#syncAndPaintMap").click(function(){
+            map.clearOverlays();
+            //TODO 启动绘制
+            setTimeout(function () {
+                writeLog("******************************************************************");
+                writeLog("绘制进度(" + getCurrentTime() + ")：开始绘制......");
+                paintMapByPointInterval = setInterval(paintMapByPoint, 10);//毫秒绘制
+            }, 1000);
+        });
+        $("#syncHistory").click(function(){
+            writeLog("同步进度(" + getCurrentTime() + ")：同步读取......");
+            $("#syncAndPaintMap_progress").text("正在同步读取，请稍等......");
+            $.ajax({url:ipport+"/MapStoreServlet?t=getall",success:function(evt){
+                var alladdresses = JSON.parse(evt);
+                writeLog("同步进度(" + getCurrentTime() + ")：同步的地址为......" + JSON.stringify(alladdresses));
+                objArray = alladdresses;//坐标对象数组
+                addrsSize = objArray.length;//地址总数
+                pointsSize = 1;//坐标总数
+                firstflag = true;
+                $("#syncAndPaintMap_progress").text("同步完成：0/" + addrsSize);
+                writeLog("同步进度(" + getCurrentTime() + ")：同步完成！");
+            },error:function(evt){
+                console.log(evt);
+            }});
+        });
+        $("#clearHistory").click(function(){
+            writeLog("重置进度(" + getCurrentTime() + ")：重置历史......");
+            $("#syncAndPaintMap_progress").text("正在重置历史，请稍等......");
+            $.ajax({url:ipport+"/MapStoreServlet?t=reset",success:function(evt){
+                map.clearOverlays();
+                writeLog("重置进度(" + getCurrentTime() + ")：重置完成！");
+                $("#syncAndPaintMap_progress").text("重置完成！");
+            },error:function(evt){
+                console.log(evt);
+            }});
+        });
+        $("#singlefile").change(handleSingleFileSelected);
+        $("#multifiles").change(handleMultiFilesSelected);
+    });
+</script>
