@@ -91,9 +91,10 @@
     var pointsSize = 1;//坐标总数
     var objArray = [];//坐标对象数组
     var currFileIndex = 0;//当前读取文件下标
+    var points = [];
 
     var ipport = "http://lfxstore.coding.io";
-//    var ipport = "http://localhost:8080/dataps_deploy";
+    //    var ipport = "http://localhost:8080/dataps_deploy";
     //通过坐标绘制地图
     function paintMapByPoint() {
         if (objArray.length > 0) {
@@ -103,13 +104,22 @@
                 map.centerAndZoom(point, 12);
                 firstflag = false;
             }
-            map.addOverlay(new BMap.Marker(point));
+            //map.addOverlay(new BMap.Marker(point));
+            points.push(point);
             writeLog("绘制进度(" + getCurrentTime() + ")：" + pointsSize + "/" + addrsSize);
             writeLog("绘制进度(" + getCurrentTime() + ")：正在绘制地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
-            $("#syncAndPaintMap_progress").text(pointsSize + "/" + addrsSize+"\t\t正在绘制地址......" + obj.addr + "=纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
+            $("#syncAndPaintMap_progress").text(pointsSize + "/" + addrsSize+"\t\t正在绘制地址......纬度(" + obj.lat + ")/经度(" + obj.lng + ")");
             pointsSize++;
         } else {
             //TODO 停止绘制
+            var options = {
+                size: BMAP_POINT_SIZE_SMALL,
+                shape: BMAP_POINT_SHAPE_STAR,
+                color: 'red'
+            }
+            var pointCollection = new BMap.PointCollection(points, options);  // 初始化PointCollection
+            map.addOverlay(pointCollection);  // 添加Overlay
+
             clearInterval(paintMapByPointInterval);
             writeLog("绘制进度(" + getCurrentTime() + ")：绘制完成！");
             $("#syncAndPaintMap_progress").text(addrsSize + "/" + addrsSize+"\t\t绘制完成！");
@@ -136,7 +146,7 @@
                     //TODO 保存数据到服务器
                     $.ajax({url:ipport+"/MapStoreServlet?t=addall&d="+JSON.stringify(uploadArray),success:function(evt){
                         writeLog("上传进度(" + getCurrentTime() + ")：上传完成！");
-//                            $("#file_progress").text(objArray.length + "/" + addrsSize+"\t\t上传完成！");
+                        $("#file_progress").text(objArray.length + "/" + addrsSize+"\t\t上传完成！");
                         uploadArray = [];
                         lockflag = false;
                     },error:function(evt){
@@ -274,6 +284,8 @@
         pointsSize = 1;//坐标总数
         objArray = [];//坐标对象数组
         currFileIndex = 0;//当前读取文件下标
+
+        points = [];
     }
     function updateProgress() {
         var valuenow = parseInt($("#progress").attr("aria-valuenow"));
